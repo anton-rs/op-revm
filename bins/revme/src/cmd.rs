@@ -21,6 +21,10 @@ pub enum Error {
 
 impl MainCmd {
     pub fn run(&self) -> Result<(), Error> {
+        if cfg!(feature = "optimism") {
+            eprintln!("optimism not supported");
+            return Err(Error::SystemError);
+        }
         match self {
             Self::Statetest(cmd) => cmd.run().map_err(Error::Statetest),
             _ => Ok(()),

@@ -32,3 +32,6 @@ thiserror = "1.0"
 triehash = "0.8"
 walkdir = "2.3"
 hex-literal = "0.4"
+
+[features]
+optimism = [ "revm/optimism" ]
