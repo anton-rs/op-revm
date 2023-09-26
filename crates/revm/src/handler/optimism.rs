@@ -150,6 +150,21 @@ mod tests {
     use crate::primitives::B256;
 
     #[test]
+    #[cfg(feature = "no_gas_measuring")]
+    fn test_revert_gas() {
+        let mut env = Env::default();
+        env.tx.gas_limit = 100;
+        env.cfg.optimism = true;
+        env.tx.optimism.source_hash = None;
+
+        let gas = handle_call_return::<BedrockSpec>(&env, InstructionResult::Revert, Gas::new(90));
+        assert_eq!(gas.remaining(), 0);
+        assert_eq!(gas.spend(), 100);
+        assert_eq!(gas.refunded(), 0);
+    }
+
+    #[test]
+    #[cfg(not(feature = "no_gas_measuring"))]
     fn test_revert_gas() {
         let mut env = Env::default();
         env.tx.gas_limit = 100;
@@ -184,8 +199,8 @@ mod tests {
         env.tx.optimism.source_hash = Some(B256::zero());
 
         let gas = handle_call_return::<RegolithSpec>(&env, InstructionResult::Stop, Gas::new(90));
-        assert_eq!(gas.remaining(), 90);
-        assert_eq!(gas.spend(), 10);
+        assert_eq!(gas.remaining(), 0);
+        assert_eq!(gas.spend(), 100);
         assert_eq!(gas.refunded(), 0);
     }
 
@@ -201,13 +216,13 @@ mod tests {
 
         let gas =
             handle_call_return::<RegolithSpec>(&env, InstructionResult::Stop, ret_gas.clone());
-        assert_eq!(gas.remaining(), 90);
-        assert_eq!(gas.spend(), 10);
-        assert_eq!(gas.refunded(), 20);
+        assert_eq!(gas.remaining(), 0);
+        assert_eq!(gas.spend(), 100);
+        assert_eq!(gas.refunded(), 0);
 
         let gas = handle_call_return::<RegolithSpec>(&env, InstructionResult::Revert, ret_gas);
-        assert_eq!(gas.remaining(), 90);
-        assert_eq!(gas.spend(), 10);
+        assert_eq!(gas.remaining(), 0);
+        assert_eq!(gas.spend(), 100);
         assert_eq!(gas.refunded(), 0);
     }
 

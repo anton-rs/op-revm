@@ -107,6 +107,7 @@ pub fn calculate_gas_refund<SPEC: Spec>(env: &Env, gas: &Gas) -> u64 {
 }
 
 #[cfg(test)]
+#[cfg(not(feature = "optimism"))]
 mod tests {
     use revm_interpreter::primitives::CancunSpec;
 
