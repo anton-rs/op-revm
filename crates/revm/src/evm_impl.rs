@@ -415,7 +415,14 @@ impl<'a, GSPEC: Spec, DB: Database, const INSPECT: bool> EVMImpl<'a, GSPEC, DB, 
                 l1_block_info: None,
             },
             inspector,
+            #[cfg(not(feature = "optimism"))]
             handler: Handler::mainnet::<GSPEC>(),
+            #[cfg(feature = "optimism")]
+            if env.cfg.is_optimism() {
+                Handler::optimism::<GSPEC>()
+            } else {
+                Handler::mainnet::<GSPEC>()
+            },
             _phantomdata: PhantomData {},
         }
     }

@@ -237,3 +237,19 @@ pub fn evm_inner<'a, DB: Database, const INSPECT: bool>(
         SpecId::REGOLITH => create_evm!(RegolithSpec),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bedrock_spec_id_handler() {
+        let mut evm = EVM::<()>::new();
+        evm.env.cfg.spec_id = SpecId::BEDROCK;
+        let mut db = ();
+        let mut inspector = NoOpInspector;
+        let mut evm = evm_inner::<(), false>(&mut evm.env, &mut db, &mut inspector);
+        assert!()
+
+    }
+}

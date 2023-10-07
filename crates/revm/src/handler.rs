@@ -22,12 +22,25 @@ type RewardBeneficiaryHandle<DB> = ReimburseCallerHandle<DB>;
 /// Calculate gas refund for transaction.
 type CalculateGasRefundHandle = fn(&Env, &Gas) -> u64;
 
+/// Handler Type.
+#[derive(Clone, Debug, Copy, Default, PartialEq, Eq)]
+pub enum HandlerType {
+    /// EVM Implementation handlers for mainnet.
+    #[default]
+    Mainnet,
+    /// EVM Implementation handlers for optimism.
+    #[cfg(feature = "optimism")]
+    Optimism,
+}
+
 /// Handler acts as a proxy and allow to define different behavior for different
 /// sections of the code. This allows nice integration of different chains or
 /// to disable some mainnet behavior.
 pub struct Handler<DB: Database> {
-    // Uses env, call resul and returned gas from the call to determine the gas
-    // that is returned from transaction execution..
+    // Internal field used to identify the type of handler. 
+    pub ty: HandlerType.
+    // Uses env, call result and returned gas from the call to determine the gas
+    // that is returned from transaction execution.
     pub call_return: CallReturnHandle,
     pub reimburse_caller: ReimburseCallerHandle<DB>,
     pub reward_beneficiary: RewardBeneficiaryHandle<DB>,
@@ -38,6 +51,7 @@ impl<DB: Database> Handler<DB> {
     /// Handler for the mainnet
     pub fn mainnet<SPEC: Spec>() -> Self {
         Self {
+            ty: HandlerType::Mainnet,
             call_return: mainnet::handle_call_return::<SPEC>,
             calculate_gas_refund: mainnet::calculate_gas_refund::<SPEC>,
             reimburse_caller: mainnet::handle_reimburse_caller::<SPEC, DB>,
@@ -49,6 +63,7 @@ impl<DB: Database> Handler<DB> {
     #[cfg(feature = "optimism")]
     pub fn optimism<SPEC: Spec>() -> Self {
         Self {
+            ty: HandlerType::Optimism,
             call_return: optimism::handle_call_return::<SPEC>,
             // we reinburse caller the same was as in mainnet.
             // Refund is calculated differently then mainnet.
@@ -56,6 +71,11 @@ impl<DB: Database> Handler<DB> {
             calculate_gas_refund: optimism::calculate_gas_refund::<SPEC>,
             reward_beneficiary: optimism::reward_beneficiary::<SPEC, DB>,
         }
+    }
+
+    /// Returns the type of [Handler] as a [HandlerType] enum.
+    pub fn type(&self) -> HandlerType {
+        self.ty
     }
 
     /// Handle call return, depending on instruction result gas will be reimbursed or not.
@@ -86,5 +106,22 @@ impl<DB: Database> Handler<DB> {
         gas_refund: u64,
     ) -> Result<(), EVMError<DB::Error>> {
         (self.reward_beneficiary)(data, gas, gas_refund)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_type() {
+        let handler = Handler::<()>::mainnet::<()>();
+        assert_eq!(handler.type(), HandlerType::Mainnet);
+    
+        #[cfg(feature = "optimism")]
+        {
+            let handler = Handler::<()>::optimism::<()>();
+            assert_eq!(handler.type(), HandlerType::Optimism);
+        }
     }
 }
