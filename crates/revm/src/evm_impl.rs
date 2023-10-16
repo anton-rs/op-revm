@@ -408,8 +408,7 @@ impl<'a, GSPEC: Spec, DB: Database, const INSPECT: bool> Transact<DB::Error>
 
                             let sender = self.env().tx.caller;
 
-                            // Increment sender nonce
-                            // todo - handle error
+                            // Increment sender nonce and mint value (if any)
                             let mut account = Account::from(
                                 self.data
                                     .db
@@ -417,6 +416,9 @@ impl<'a, GSPEC: Spec, DB: Database, const INSPECT: bool> Transact<DB::Error>
                                     .unwrap_or_default()
                                     .unwrap_or_default(),
                             );
+                            account.info.balance = account.info.balance.saturating_add(U256::from(
+                                self.env().tx.optimism.mint.unwrap_or(0),
+                            ));
                             account.info.nonce = account.info.nonce.saturating_add(1);
                             account.mark_touch();
                             let state = HashMap::<Address, Account>::from([(sender, account)]);
