@@ -14,7 +14,9 @@ use crate::{db::Database, journaled_state::JournaledState, precompile, Inspector
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
+use precompile::HashMap;
 use revm_interpreter::gas::initial_tx_gas;
+use revm_interpreter::primitives::Account;
 use revm_interpreter::MAX_CODE_SIZE;
 use revm_precompile::{Precompile, Precompiles};
 
@@ -73,11 +75,7 @@ pub trait Transact<DBError> {
     fn transact_preverified(&mut self) -> EVMResult<DBError>;
 
     /// Execute transaction by running pre-verification steps and then transaction itself.
-    #[inline]
-    fn transact(&mut self) -> EVMResult<DBError> {
-        self.preverify_transaction()
-            .and_then(|_| self.transact_preverified())
-    }
+    fn transact(&mut self) -> EVMResult<DBError>;
 }
 
 impl<'a, DB: Database> EVMData<'a, DB> {
@@ -380,6 +378,79 @@ impl<'a, GSPEC: Spec, DB: Database, const INSPECT: bool> Transact<DB::Error>
         };
 
         Ok(ResultAndState { result, state })
+    }
+
+    #[inline]
+    fn transact(&mut self) -> EVMResult<DB::Error> {
+        #[cfg(not(feature = "optimism"))]
+        {
+            self.preverify_transaction()
+                .and_then(|_| self.transact_preverified())
+        }
+
+        #[cfg(feature = "optimism")]
+        match self
+            .preverify_transaction()
+            .and_then(|_| self.transact_preverified())
+        {
+            Ok(res) => Ok(res),
+            Err(err) => {
+                if self.env().cfg.optimism && self.env().tx.optimism.source_hash.is_some() {
+                    match err {
+                        EVMError::Header(_) | EVMError::Database(_) => Err(err),
+                        EVMError::Transaction(_) => {
+                            // If the transaction is a deposit transaction and it failed
+                            // for any reason, the caller nonce must be bumped, and the
+                            // gas reported must be the gas limit of the deposit. This is
+                            // also not returned as an error so that consumers can more
+                            // easily distinguish between a failed deposit and a failed
+                            // normal transaction.
+
+                            let sender = self.env().tx.caller;
+
+                            // Increment sender nonce
+                            // todo - handle error
+                            let mut account = Account::from(
+                                self.data
+                                    .db
+                                    .basic(sender)
+                                    .unwrap_or_default()
+                                    .unwrap_or_default(),
+                            );
+                            account.info.nonce = account.info.nonce.saturating_add(1);
+                            account.mark_touch();
+                            let state = HashMap::<Address, Account>::from([(sender, account)]);
+
+                            // The gas used of a failed deposit prior to regolith is the gas
+                            // limit of the transaction. Post-regolith, it is 0 for all
+                            // deposits.
+                            let gas_used = if GSPEC::enabled(REGOLITH)
+                                || !self
+                                    .env()
+                                    .tx
+                                    .optimism
+                                    .is_system_transaction
+                                    .unwrap_or(false)
+                            {
+                                self.env().tx.gas_limit
+                            } else {
+                                0
+                            };
+
+                            Ok(ResultAndState {
+                                result: ExecutionResult::Halt {
+                                    reason: revm_interpreter::primitives::Halt::FailedDeposit,
+                                    gas_used,
+                                },
+                                state,
+                            })
+                        }
+                    }
+                } else {
+                    Err(err)
+                }
+            }
+        }
     }
 }
 
