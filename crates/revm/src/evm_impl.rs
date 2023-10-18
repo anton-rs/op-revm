@@ -350,20 +350,25 @@ impl<'a, GSPEC: Spec, DB: Database, const INSPECT: bool> Transact<DB::Error>
                 // output is a contract creation, increment the account nonce even if
                 // the transaction halts.
                 #[cfg(feature = "optimism")]
-                {
+                let final_gas_used = {
                     let is_deposit = self.data.env.tx.optimism.source_hash.is_some();
-                    let is_creation = matches!(output, Output::Create(_, _));
                     let regolith_enabled = GSPEC::enabled(REGOLITH);
                     let optimism_regolith = self.data.env.cfg.optimism && regolith_enabled;
-                    if is_deposit && is_creation && optimism_regolith {
-                        let (acc, _) = self
-                            .data
-                            .journaled_state
-                            .load_account(tx_caller, self.data.db)
-                            .map_err(EVMError::Database)?;
-                        acc.info.nonce = acc.info.nonce.checked_add(1).unwrap_or(u64::MAX);
+                    if is_deposit && optimism_regolith {
+                        if matches!(output, Output::Create(_, _)) {
+                            let (acc, _) = self
+                                .data
+                                .journaled_state
+                                .load_account(tx_caller, self.data.db)
+                                .map_err(EVMError::Database)?;
+                            acc.info.nonce = acc.info.nonce.checked_add(1).unwrap_or(u64::MAX);
+                        }
+
+                        self.data.env.tx.gas_limit
+                    } else {
+                        final_gas_used
                     }
-                }
+                };
                 ExecutionResult::Halt {
                     reason,
                     gas_used: final_gas_used,
