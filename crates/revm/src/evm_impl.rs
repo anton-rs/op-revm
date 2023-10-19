@@ -328,7 +328,7 @@ impl<'a, GSPEC: Spec, DB: Database, const INSPECT: bool> Transact<DB::Error>
         let final_gas_used = gas.spend() - gas_refunded;
 
         // reset journal and return present state.
-        let (state, logs) = self.data.journaled_state.finalize();
+        let (mut state, logs) = self.data.journaled_state.finalize();
 
         let result = match call_result.into() {
             SuccessOrHalt::Success(reason) => ExecutionResult::Success {
@@ -352,16 +352,14 @@ impl<'a, GSPEC: Spec, DB: Database, const INSPECT: bool> Transact<DB::Error>
                 #[cfg(feature = "optimism")]
                 let final_gas_used = {
                     let is_deposit = self.data.env.tx.optimism.source_hash.is_some();
-                    let regolith_enabled = GSPEC::enabled(REGOLITH);
-                    let optimism_regolith = self.data.env.cfg.optimism && regolith_enabled;
+                    let optimism_regolith = self.data.env.cfg.optimism && GSPEC::enabled(REGOLITH);
                     if is_deposit && optimism_regolith {
+                        // Manually bump the sender nonce if the creation halted in a deposit
+                        // transaction after Regolith.
                         if matches!(output, Output::Create(_, _)) {
-                            let (acc, _) = self
-                                .data
-                                .journaled_state
-                                .load_account(tx_caller, self.data.db)
-                                .map_err(EVMError::Database)?;
+                            let mut acc = state.get_mut(&tx_caller).cloned().unwrap_or_default();
                             acc.info.nonce = acc.info.nonce.checked_add(1).unwrap_or(u64::MAX);
+                            state.insert(tx_caller, acc);
                         }
 
                         self.data.env.tx.gas_limit
