@@ -9,8 +9,6 @@ mod secp256k1 {
     use crate::B256;
     use k256::ecdsa::{Error, RecoveryId, Signature, VerifyingKey};
 
-    use secp256k1 as _;
-
     pub fn ecrecover(sig: &[u8; 65], msg: &B256) -> Result<B256, Error> {
         // parse signature
         let recid = RecoveryId::from_byte(sig[64]).expect("Recovery id is valid");

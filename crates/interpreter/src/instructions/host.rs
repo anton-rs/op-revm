@@ -397,9 +397,9 @@ pub fn auth<H: Host, SPEC: Spec>(interpreter: &mut Interpreter<'_>, host: &mut H
     // If the memory region is longer than 65 bytes, pull the commit from the next [1, 32] bytes.
     let commit = (mem_slice.len() > 65).then(|| {
         let mut buf = B256::ZERO;
-        let len_diff = mem_slice.len() - 65;
-        let cpy_size = if len_diff > 32 { 32 } else { len_diff };
-        buf[0..len_diff].copy_from_slice(&mem_slice[65..65 + cpy_size]);
+        let remaining = mem_slice.len() - 65;
+        let cpy_size = (remaining > 32).then_some(32).unwrap_or(remaining);
+        buf[0..remaining].copy_from_slice(&mem_slice[65..65 + cpy_size]);
         buf
     });
 

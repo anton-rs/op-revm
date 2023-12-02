@@ -5,11 +5,10 @@ mod stack;
 
 pub use analysis::BytecodeLocked;
 pub use contract::Contract;
-use revm_primitives::Address;
 pub use shared_memory::{next_multiple_of_32, SharedMemory};
 pub use stack::{Stack, STACK_LIMIT};
 
-use crate::primitives::Bytes;
+use crate::primitives::{Address, Bytes};
 use crate::{Gas, Host, InstructionResult};
 use alloc::boxed::Box;
 
